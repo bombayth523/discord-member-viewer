@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Discord Members — Admin Viewer (All features)</title>
+
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --accent:#6f42c1; --bg:#f6f7fb; --card:#fff; --text:#0f172a;
+    }
+    [data-theme="dark"]{
+      --accent:#8b5cf6; --bg:#0b1220; --card:#071022; --text:#e6eef8;
+    }
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial; background:var(--bg); color:var(--text); padding:18px}
+    .card{background:var(--card); box-shadow:0 6px 20px rgba(12,12,30,0.06)}
+    .avatar{width:44px;height:44px;border-radius:8px;object-fit:cover}
+    .role-badge{background:rgba(111,66,193,0.08);color:var(--accent);padding:4px 8px;border-radius:999px;font-size:12px;margin:2px;display:inline-block}
+    .table thead th { position: sticky; top:0; background:var(--card); z-index:2 }
+    .small-muted{font-size:13px;color:rgba(100,100,120,0.9)}
+    .no-data{padding:36px;text-align:center;color:#9aa0b1}
+    .toggle-col {cursor:pointer}
+    .sortable { cursor:pointer; user-select:none }
+    .sort-ind { font-size:12px; opacity:0.7; margin-left:6px }
+    .filter-box { max-height:220px; overflow:auto; padding:6px; border:1px dashed rgba(0,0,0,0.06); border-radius:6px }
+    .controls-wrap .btn { white-space:nowrap }
+    .stats-badge { background:rgba(0,0,0,0.04); padding:8px 12px; border-radius:10px; margin-right:8px }
+    .sticky-controls { position: sticky; top:8px; z-index:10 }
+    .tooltip-inner { max-width:500px; text-align:left }
+    @media (max-width:900px){ .desktop-only{display:none} }
+  </style>
+</head>
+<body>
+  <div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-start mb-3">
+      <div>
+        <h3 class="mb-1">Discord Members — Admin Viewer</h3>
+        <div class="small-muted">ครบเครื่อง: filter, sort, pagination, export PDF/Excel, autosave note</div>
+      </div>
+      <div class="d-flex gap-2">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="darkMode">
+          <label class="form-check-label small" for="darkMode">Dark</label>
+        </div>
+        <button id="helpBtn" class="btn btn-outline-secondary"><i class="bi bi-question-circle"></i> ช่วยเหลือ</button>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <!-- Controls -->
+      <div class="col-12">
+        <div class="card p-3 sticky-controls">
+          <div class="d-flex gap-2 flex-wrap controls-wrap align-items-center">
+            <label class="btn btn-primary mb-0">
+              <i class="bi bi-upload"></i> เลือกไฟล์ JSON
+              <input id="fileInput" type="file" accept=".json,application/json" hidden>
+            </label>
+
+            <input id="search" class="form-control" style="min-width:280px" placeholder="ค้นหา username หรือ userId..." />
+
+            <div class="input-group" style="max-width:220px">
+              <input id="quickJump" type="number" class="form-control" placeholder="ไปหน้า" min="1">
+              <button id="jumpBtn" class="btn btn-outline-secondary">ไป</button>
+            </div>
+
+            <div class="btn-group" role="group" aria-label="exports">
+              <button id="exportPdf" class="btn btn-danger" disabled><i class="bi bi-file-earmark-pdf"></i> PDF</button>
+              <button id="exportXlsx" class="btn btn-success" disabled><i class="bi bi-file-earmark-excel"></i> Excel</button>
+              <button id="downloadJson" class="btn btn-outline-primary" disabled><i class="bi bi-download"></i> JSON</button>
+            </div>
+
+            <div class="ms-auto d-flex gap-2">
+              <div class="stats-badge" id="statTotal">Total: -</div>
+              <div class="stats-badge" id="statHuman">Human: -</div>
+              <div class="stats-badge" id="statBot">Bot: -</div>
+            </div>
+          </div>
+
+          <div class="row mt-3 g-2 align-items-center">
+            <!-- Role multi-select -->
+            <div class="col-lg-4 col-md-6">
+              <label class="form-label mb-1">Filter by Roles (เลือกได้หลายตัว)</label>
+              <div id="roleList" class="filter-box"></div>
+            </div>
+
+            <!-- advanced filters -->
+            <div class="col-lg-4 col-md-6">
+              <label class="form-label mb-1">Advanced filters</label>
+              <div class="d-flex gap-2">
+                <select id="typeFilter" class="form-select" style="max-width:160px">
+                  <option value="">ทุกประเภท</option>
+                  <option value="human">Human เท่านั้น</option>
+                  <option value="bot">Bot เท่านั้น</option>
+                </select>
+                <input id="joinedAfter" type="date" class="form-control" title="Joined after" />
+                <input id="joinedBefore" type="date" class="form-control" title="Joined before" />
+              </div>
+              <div class="form-check form-switch mt-2">
+                <input class="form-check-input" type="checkbox" id="filterEmptyNote">
+                <label class="form-check-label small" for="filterEmptyNote">เฉพาะคนที่ Note ยังว่าง</label>
+              </div>
+            </div>
+
+            <div class="col-lg-4 col-md-12">
+              <label class="form-label mb-1">Columns / Options</label>
+              <div class="d-flex gap-2 align-items-center">
+                <div class="form-check">
+                  <input class="form-check-input colToggle" data-col="avatar" type="checkbox" id="toggleAvatar" checked>
+                  <label class="form-check-label small" for="toggleAvatar">Avatar</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input colToggle" data-col="createdAt" type="checkbox" id="toggleCreated" checked>
+                  <label class="form-check-label small" for="toggleCreated">CreatedAt</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input colToggle" data-col="joinedAt" type="checkbox" id="toggleJoined" checked>
+                  <label class="form-check-label small" for="toggleJoined">JoinedAt</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="autoSaveNote" checked>
+                  <label class="form-check-label small" for="autoSaveNote">Auto-save Note</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="col-12">
+        <div class="card p-0">
+          <div class="table-responsive" style="max-height:68vh; overflow:auto;">
+            <table id="membersTable" class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th data-col="avatar" class="avatar-col">รูป</th>
+                  <th class="sortable" data-sort="username">Username <span class="sort-ind" id="sortUsername"></span></th>
+                  <th class="sortable" data-sort="userId">UserID <span class="sort-ind" id="sortUserId"></span></th>
+                  <th>Roles</th>
+                  <th class="sortable" data-sort="createdAt">CreatedAt <span class="sort-ind" id="sortCreatedAt"></span></th>
+                  <th class="sortable" data-sort="joinedAt">JoinedAt <span class="sort-ind" id="sortJoinedAt"></span></th>
+                  <th>Note</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody">
+                <tr><td colspan="7" class="no-data">ยังไม่มีข้อมูล — กรุณาอัปโหลดไฟล์ JSON</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Pagination -->
+        <div class="mt-2 d-flex justify-content-between align-items-center">
+          <div>
+            <div class="btn-group" role="group" aria-label="paginationSize">
+              <button class="btn btn-sm btn-outline-secondary" id="prevPage">← ก่อนหน้า</button>
+              <span class="btn btn-sm" id="pageInfo">หน้า 0 / 0</span>
+              <button class="btn btn-sm btn-outline-secondary" id="nextPage">ถัดไป →</button>
+            </div>
+          </div>
+          <div class="d-flex gap-2 align-items-center">
+            <label class="small mb-0">แถว/หน้า</label>
+            <select id="perPage" class="form-select form-select-sm" style="width:90px">
+              <option>50</option>
+              <option selected>100</option>
+              <option>200</option>
+              <option>500</option>
+            </select>
+            <div class="small text-muted" id="visibleCount">แสดง 0 รายการ</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.19.1/package/dist/xlsx.full.min.js"></script>
+
+  <script>
+    // ---------- Utilities ----------
+    const $ = id => document.getElementById(id);
+    const qS = s => document.querySelector(s);
+    const qSA = s => Array.from(document.querySelectorAll(s));
+    const fmt = d => d ? new Date(d).toLocaleString('th-TH') : '-';
+    const escapeHtml = s => (s===undefined||s===null)?'': String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+
+    // ---------- State ----------
+    let fullData = []; // original users array
+    let filteredData = [];
+    let serverInfo = {};
+    let currentPage = 1;
+    let sortState = { field: null, dir: 1 }; // dir: 1 asc, -1 desc
+    let perPage = Number($('perPage').value || 100);
+    let selectedRoles = new Set();
+    let autoSaveNote = true;
+
+    // Keys for localStorage
+    const LS_PREFIX = 'dm_viewer_'; // will append serverId
+
+    // ---------- Init theme ----------
+    const darkModeToggle = $('darkMode');
+    function applyTheme(dark){
+      if(dark) document.documentElement.setAttribute('data-theme','dark');
+      else document.documentElement.removeAttribute('data-theme');
+      localStorage.setItem('dm_theme_dark', dark ? '1' : '0');
+    }
+    darkModeToggle.addEventListener('change', e => applyTheme(e.target.checked));
+    applyTheme(localStorage.getItem('dm_theme_dark') === '1');
+
+    // ---------- File load ----------
+    $('fileInput').addEventListener('change', async (e)=>{
+      const f = e.target.files[0];
+      if(!f) return;
+      try{
+        const txt = await f.text();
+        const json = JSON.parse(txt);
+        if(Array.isArray(json)) { fullData = json; serverInfo = {}; }
+        else { fullData = json.users || []; serverInfo = json.info || {}; }
+        // ensure fields exist and default
+        fullData = fullData.map(u => ({
+          userId: u.userId || u.id || '',
+          username: u.username || (u.user && u.user.username) || '',
+          description: u.description || '',
+          roles: Array.isArray(u.roles) ? u.roles : (u.roles ? [u.roles] : []),
+          avatarUrl: u.avatarUrl || (u.avatar && u.avatar.url) || '',
+          createdAt: u.createdAt || u.created_at || null,
+          joinedAt: u.joinedAt || u.joined_at || null,
+          note: u.note || ''
+        }));
+        // load saved notes if any
+        const lsKey = LS_PREFIX + (serverInfo.serverId || 'global');
+        const saved = localStorage.getItem(lsKey);
+        if(saved){
+          try{
+            const obj = JSON.parse(saved);
+            // map notes by userId
+            const notes = obj.notes || {};
+            fullData.forEach(u => { if(notes[u.userId] !== undefined) u.note = notes[u.userId]; });
+          } catch(e){}
+        }
+        // build role list
+        buildRoleList();
+        // reset filters
+        resetFilters();
+        updateStats();
+        renderPage(1);
+        $('exportPdf').disabled = false;
+        $('exportXlsx').disabled = false;
+        $('downloadJson').disabled = false;
+        $('fileInput').value = '';
+      } catch(err){
+        alert('อ่านไฟล์ไม่สำเร็จ: ' + err.message);
+      }
+    });
+
+    // ---------- Build role checkboxes ----------
+    function buildRoleList(){
+      const roleDiv = $('roleList');
+      roleDiv.innerHTML = '';
+      const allRoles = new Map();
+      fullData.forEach(u => {
+        (u.roles || []).forEach(r => {
+          const name = (typeof r === 'string') ? r : (r.name || r.id || '');
+          if(name) allRoles.set(name, (allRoles.get(name)||0)+1);
+        });
+      });
+      const roles = [...allRoles.entries()].sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+      if(roles.length === 0){
+        roleDiv.innerHTML = '<div class="small-muted">ไม่มี role ในข้อมูล</div>';
+        return;
+      }
+      const fragment = document.createDocumentFragment();
+      roles.forEach(name=>{
+        const id = 'rolechk_' + name.replace(/\s+/g,'_').replace(/[^\w\-]/g,'');
+        const wrapper = document.createElement('div');
+        wrapper.className = 'form-check';
+        wrapper.innerHTML = `<input class="form-check-input role-check" type="checkbox" id="${id}" value="${escapeHtml(name)}">
+                             <label class="form-check-label small" for="${id}">${escapeHtml(name)}</label>`;
+        fragment.appendChild(wrapper);
+      });
+      roleDiv.appendChild(fragment);
+      // bind
+      qSA('.role-check').forEach(cb=>{
+        cb.addEventListener('change', ()=>{
+          selectedRoles = new Set(qSA('.role-check:checked').map(x=>x.value));
+          applyFilters();
+        });
+      });
+    }
+
+    // ---------- Filters ----------
+    $('search').addEventListener('input', debounce(()=>applyFilters(), 250));
+    $('typeFilter').addEventListener('change', applyFilters);
+    $('joinedAfter').addEventListener('change', applyFilters);
+    $('joinedBefore').addEventListener('change', applyFilters);
+    $('filterEmptyNote')?.addEventListener('change', applyFilters);
+    $('perPage').addEventListener('change', ()=>{ perPage = Number($('perPage').value); renderPage(1); });
+
+    function resetFilters(){
+      $('search').value = '';
+      $('typeFilter').value = '';
+      $('joinedAfter').value = '';
+      $('joinedBefore').value = '';
+      $('filterEmptyNote').checked = false;
+      qSA('.role-check').forEach(cb=>cb.checked = false);
+      selectedRoles = new Set();
+      currentPage = 1;
+      sortState = {field:null, dir:1};
+    }
+
+    function applyFilters(){
+      const q = ($('search').value||'').toLowerCase().trim();
+      const type = $('typeFilter').value;
+      const after = $('joinedAfter').value ? new Date($('joinedAfter').value) : null;
+      const before = $('joinedBefore').value ? new Date($('joinedBefore').value) : null;
+      const onlyEmptyNote = $('filterEmptyNote')?.checked;
+      // filter
+      filteredData = fullData.filter(u=>{
+        if(q){
+          if(!(String(u.userId||'').toLowerCase().includes(q) || String(u.username||'').toLowerCase().includes(q))) return false;
+        }
+        if(type==='bot' && !(String(u.username||'').toLowerCase().includes('bot'))) return false;
+        if(type==='human' && String(u.username||'').toLowerCase().includes('bot')) return false;
+        if(after && (!u.joinedAt || new Date(u.joinedAt) < after)) return false;
+        if(before && (!u.joinedAt || new Date(u.joinedAt) > (new Date(before).setDate(new Date(before).getDate()+1)))) return false; // inclusive
+        if(onlyEmptyNote && (u.note && u.note.trim() !== '')) return false;
+        // roles filter (A: "has at least one selected role")
+        if(selectedRoles.size > 0){
+          const userRoleNames = (u.roles||[]).map(r => typeof r === 'string' ? r : (r.name||''));
+          const hasOne = [...selectedRoles].some(rn => userRoleNames.includes(rn));
+          if(!hasOne) return false;
+        }
+        return true;
+      });
+      // after filtering, reset page
+      currentPage = 1;
+      applySort(); // apply current sort too
+      renderPage(1);
+      updateStats();
+    }
+
+    // ---------- Stats ----------
+    function updateStats(){
+      const total = fullData.length;
+      const bots = fullData.filter(u=> String(u.username||'').toLowerCase().includes('bot')).length;
+      const humans = total - bots;
+      $('statTotal').innerText = `Total: ${total}`;
+      $('statBot').innerText = `Bot: ${bots}`;
+      $('statHuman').innerText = `Human: ${humans}`;
+      $('visibleCount').innerText = `แสดง ${filteredData.length || 0} รายการ (หน้า ${currentPage})`;
+    }
+
+    // ---------- Sorting ----------
+    qSA('.sortable').forEach(th=>{
+      th.addEventListener('click', ()=>{
+        const field = th.getAttribute('data-sort');
+        if(sortState.field === field) sortState.dir = -sortState.dir;
+        else { sortState.field = field; sortState.dir = 1; }
+        applySort();
+        renderPage(currentPage);
+        updateSortIcons();
+      });
+    });
+
+    function applySort(){
+      if(!sortState.field){ filteredData = filteredData || fullData.slice(); return; }
+      const f = sortState.field; const dir = sortState.dir;
+      filteredData.sort((a,b)=>{
+        let va = a[f] || ''; let vb = b[f] || '';
+        // if date strings
+        if(f === 'createdAt' || f === 'joinedAt'){ va = a[f] ? new Date(a[f]).getTime() : 0; vb = b[f] ? new Date(b[f]).getTime() : 0; }
+        // numeric userId
+        if(f === 'userId'){ va = BigInt(String(va||0)); vb = BigInt(String(vb||0)); }
+        if(va < vb) return -1 * dir;
+        if(va > vb) return 1 * dir;
+        return 0;
+      });
+    }
+
+    function updateSortIcons(){
+      // clear
+      ['Username','UserId','CreatedAt','JoinedAt'].forEach(k=>{
+        const el = $(`sort${k}`);
+        if(el) el.innerHTML = '';
+      });
+      if(!sortState.field) return;
+      const id = sortState.field === 'username' ? 'sortUsername' :
+                 sortState.field === 'userId' ? 'sortUserId' :
+                 sortState.field === 'createdAt' ? 'sortCreatedAt' :
+                 'sortJoinedAt';
+      const sym = sortState.dir === 1 ? '▲' : '▼';
+      $(id).innerText = sym;
+    }
+
+    // ---------- Render / Pagination ----------
+    function renderPage(page){
+      if(!filteredData) filteredData = fullData.slice();
+      const totalItems = filteredData.length;
+      perPage = Number($('perPage').value);
+      const totalPages = Math.max(1, Math.ceil(totalItems / perPage));
+      currentPage = Math.min(Math.max(1, page), totalPages);
+      const start = (currentPage -1) * perPage;
+      const slice = filteredData.slice(start, start + perPage);
+
+      const tbody = $('tableBody');
+      tbody.innerHTML = '';
+      if(slice.length === 0){
+        tbody.innerHTML = `<tr><td colspan="7" class="no-data">ไม่พบข้อมูล</td></tr>`;
+      } else {
+        const frag = document.createDocumentFragment();
+        slice.forEach((u, idx)=>{
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td data-col="avatar" class="avatar-col"><img src="${escapeHtml(u.avatarUrl||'https://cdn.discordapp.com/embed/avatars/0.png')}" class="avatar"></td>
+            <td><strong>${escapeHtml(u.username)}</strong><div class="small-muted">${escapeHtml(u.description||'')}</div></td>
+            <td><code style="font-size:12px">${escapeHtml(u.userId)}</code></td>
+            <td>${(u.roles||[]).map(r=>`<span class="role-badge" title="${escapeHtml(typeof r === 'string' ? r : (r.name||''))}">${escapeHtml(typeof r === 'string' ? r : (r.name||''))}</span>`).join('')}</td>
+            <td data-col="createdAt">${u.createdAt?fmt(u.createdAt):'-'}</td>
+            <td data-col="joinedAt">${u.joinedAt?fmt(u.joinedAt):'-'}</td>
+            <td><input data-uid="${escapeHtml(u.userId)}" class="form-control form-control-sm note-input" value="${escapeHtml(u.note||'')}" /></td>
+          `;
+          frag.appendChild(tr);
+        });
+        tbody.appendChild(frag);
+      }
+
+      // page info
+      $('pageInfo').innerText = `หน้า ${currentPage} / ${totalPages}`;
+      $('visibleCount').innerText = `แสดง ${slice.length} / ${filteredData.length} รายการ`;
+
+      // bind note inputs
+      qSA('.note-input').forEach(inp=>{
+        inp.addEventListener('change', (e)=>{
+          const uid = e.target.dataset.uid;
+          const newVal = e.target.value;
+          // find in fullData and update
+          const idx = fullData.findIndex(x=>String(x.userId) === String(uid));
+          if(idx !== -1){ fullData[idx].note = newVal; if(autoSaveNote) saveNotesToLS(); }
+        });
+      });
+    }
+
+    // Pagination buttons
+    $('prevPage').addEventListener('click', ()=>{ if(currentPage>1) renderPage(currentPage-1); });
+    $('nextPage').addEventListener('click', ()=>{ const totalPages = Math.ceil((filteredData.length||0)/perPage); if(currentPage<totalPages) renderPage(currentPage+1); });
+
+    // Quick jump
+    $('jumpBtn').addEventListener('click', ()=>{ const p = Number($('quickJump').value||1); renderPage(p); });
+
+    // ---------- Column toggles ----------
+    qSA('.colToggle').forEach(el=>{
+      el.addEventListener('change', ()=>{
+        const col = el.dataset.col;
+        const checked = el.checked;
+        qSA(`[data-col="${col}"]`).forEach(node => node.style.display = checked ? '' : 'none');
+      });
+    });
+
+    // ---------- Auto-save notes ----------
+    $('autoSaveNote').addEventListener('change', (e)=>{ autoSaveNote = e.target.checked; });
+    function saveNotesToLS(){
+      if(!serverInfo.serverId) return;
+      const notesObj = {};
+      fullData.forEach(u => { if(u.note) notesObj[u.userId] = u.note; });
+      const payload = { notes: notesObj, savedAt: new Date().toISOString() };
+      localStorage.setItem(LS_PREFIX + serverInfo.serverId, JSON.stringify(payload));
+    }
+
+    // ---------- Export JSON ----------
+    $('downloadJson').addEventListener('click', ()=>{
+      const out = { users: fullData, info: serverInfo };
+      const blob = new Blob([JSON.stringify(out, null, 2)], { type:'application/json' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (serverInfo.serverName?serverInfo.serverName.replace(/\s+/g,'_'):'members') + '-edited.json';
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+
+    // ---------- Export Excel ----------
+    $('exportXlsx').addEventListener('click', ()=>{
+      // use only current filteredData (all pages)
+      const arr = (filteredData || fullData).map(u=>({
+        userId: u.userId, username: u.username, description: u.description,
+        roles: (u.roles||[]).map(r=> typeof r === 'string' ? r : r.name).join(', '),
+        createdAt: u.createdAt, joinedAt: u.joinedAt, note: u.note
+      }));
+      const ws = XLSX.utils.json_to_sheet(arr);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Members');
+      XLSX.writeFile(wb, (serverInfo.serverName?serverInfo.serverName.replace(/\s+/g,'_'):'members') + '.xlsx');
+    });
+
+    // ---------- Export PDF (multi-page) ----------
+    $('exportPdf').addEventListener('click', async ()=>{
+      // expand to render full filtered table (all rows)
+      const originalPerPage = perPage;
+      // temporarily create a large hidden table clone for render
+      const container = document.createElement('div');
+      container.style.position = 'fixed';
+      container.style.left = '-20000px';
+      container.style.top = '0';
+      container.style.background = 'white';
+      const table = document.getElementById('membersTable').cloneNode(true);
+      // rebuild tbody with all filtered rows
+      const tbody = table.querySelector('tbody'); tbody.innerHTML = '';
+      const arr = (filteredData && filteredData.length>0 ? filteredData : fullData);
+      arr.forEach(u=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><img src="${escapeHtml(u.avatarUrl||'https://cdn.discordapp.com/embed/avatars/0.png')}" class="avatar"></td>
+                        <td><strong>${escapeHtml(u.username)}</strong><div class="small-muted">${escapeHtml(u.description||'')}</div></td>
+                        <td><code>${escapeHtml(u.userId)}</code></td>
+                        <td>${(u.roles||[]).map(r=>`<span class="role-badge">${escapeHtml(typeof r === 'string' ? r : (r.name||''))}</span>`).join('')}</td>
+                        <td>${u.createdAt?fmt(u.createdAt):'-'}</td>
+                        <td>${u.joinedAt?fmt(u.joinedAt):'-'}</td>
+                        <td>${escapeHtml(u.note||'')}</td>`;
+        tbody.appendChild(tr);
+      });
+      container.appendChild(table);
+      document.body.appendChild(container);
+
+      try{
+        const canvas = await html2canvas(table, { scale: 2, useCORS: true, allowTaint: true, width: table.scrollWidth, height: table.scrollHeight });
+        const imgData = canvas.toDataURL('image/png');
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('l', 'pt', 'a4');
+        const pdfW = pdf.internal.pageSize.getWidth();
+        const pdfH = pdf.internal.pageSize.getHeight();
+        const imgW = canvas.width;
+        const imgH = canvas.height;
+        const ratio = pdfW / imgW;
+        let renderedH = imgH * ratio;
+        if(renderedH <= pdfH){
+          pdf.addImage(imgData, 'PNG', 0, 0, pdfW, renderedH);
+        } else {
+          // split into pages
+          let position = 0;
+          const pageCanvasHeight = Math.floor(pdfH / ratio);
+          while(position < imgH){
+            const ch = Math.min(pageCanvasHeight, imgH - position);
+            const pageCanvas = document.createElement('canvas');
+            pageCanvas.width = imgW;
+            pageCanvas.height = ch;
+            const ctx = pageCanvas.getContext('2d');
+            ctx.drawImage(canvas, 0, position, imgW, ch, 0, 0, imgW, ch);
+            const pageImg = pageCanvas.toDataURL('image/png');
+            if(position > 0) pdf.addPage();
+            pdf.addImage(pageImg, 'PNG', 0, 0, pdfW, ch * ratio);
+            position += ch;
+          }
+        }
+        const fname = (serverInfo.serverName?serverInfo.serverName.replace(/\s+/g,'_'):'members') + '.pdf';
+        pdf.save(fname);
+      } catch(err){
+        alert('เกิดข้อผิดพลาดขณะสร้าง PDF: ' + err.message);
+      } finally {
+        container.remove();
+      }
+    });
+
+    // ---------- Helpers ----------
+    function debounce(fn, ms=200){
+      let t;
+      return (...args)=>{ clearTimeout(t); t = setTimeout(()=>fn(...args), ms); };
+    }
+
+    // ---------- Persistence before unload ----------
+    window.addEventListener('beforeunload', ()=>{
+      if(autoSaveNote && serverInfo.serverId) saveNotesToLS();
+    });
+
+    // ---------- UI: Help ----------
+    $('helpBtn').addEventListener('click', ()=>{
+      alert(`Quick guide:
+- เลือกไฟล์ JSON ที่บอทสร้าง
+- ใช้ Role filter (เลือกหลายตัวได้) — เงื่อนไข: มีอย่างน้อยหนึ่ง role ที่เลือก (แบบ A)
+- ใช้ Search เพื่อค้น username หรือ userId
+- คลิกหัวคอลัมน์เพื่อเรียง
+- แก้ Note ในช่องแล้วจะบันทึกอัตโนมัติ (ถ้าเปิด Auto-save)
+- Export: PDF / Excel / JSON
+- Pagination: ปรับแถว/หน้า และไปหน้าโดยตรง (Quick Jump)`);
+    });
+
+    // ---------- Initial values ----------
+    filteredData = fullData.slice();
+
+    // ---------- Optional: Try auto-load example if hosted with file ----------
+    (async ()=>{
+      try{
+        const resp = await fetch('/members-826744229111267338-1764913269901.json');
+        if(resp.ok){
+          const txt = await resp.text();
+          const json = JSON.parse(txt);
+          // simulate loading
+          fullData = json.users || json;
+          serverInfo = json.info || {};
+          buildRoleList();
+          filteredData = fullData.slice();
+          updateStats();
+          renderPage(1);
+          $('exportPdf').disabled = false;
+          $('exportXlsx').disabled = false;
+          $('downloadJson').disabled = false;
+        }
+      } catch(e){}
+    })();
+
+  </script>
+</body>
+</html>
